@@ -10,7 +10,7 @@ volatile long leftEnCount = 0;
 volatile long rightEnCount = 0;
 
 float pulsePerRound = 2000;
-float pulsePerRoundR = 1500;
+// float pulsePerRoundR = 1500;
 
 // Left motor
 int ENA = 7;
@@ -41,7 +41,7 @@ float w = 0;
 float l = 0.18;
 float r = 0.025;
 
-float samplingrate = 20;
+float samplingrate = 10;
 int maxrpm = 106;
 
 float vl = 0;
@@ -142,19 +142,6 @@ void stop() {
   digitalWrite(IN4, LOW);
 }
 
-float calculateSpeed(){
-  rpmL = (float)(leftEnCount * (1000/samplingrate) * 60 / pulsePerRound);
-  rpmR = (float)(rightEnCount * (1000/samplingrate) * 60 / pulsePerRoundR);
-
-  vl = rpmL/60 * (2*r*3.1412);
-  vr = rpmR/60 * (2*r*3.1412);
-
-  leftEnCount = 0;
-  rightEnCount = 0;
-
-  return vl, vr;
-}
-
 void moveWithInput(float v, float w) {
   vl = (2 * v - (l * w)) / 2;
   vr = (2 * v + (l * w)) / 2;
@@ -164,16 +151,18 @@ void moveWithInput(float v, float w) {
   int analogvr = analogConverter(vr, 1);
 
   if (direction == 0) {
-    if (v == 0 && w > 0) {
-      rotateLeft(150, 150);
+    if (v == 0 && w > 0){
+      rotateLeft(255,255);
       leftOrright = 1;
-    } else if (v == 0 && w < 0) {
-      rotateRight(150, 150);
-      leftOrright = 2;
-    } else {
-      move(analogvl, analogvr);
-      leftOrright = 0;
     }
+    else if (v == 0 && w < 0){
+      rotateRight(255,255);
+      leftOrright = 2;
+    }
+    else {
+      move(analogvl, analogvr);
+    }
+    leftOrright = 0;
   } else if (direction == 1) {
     back(analogvl, analogvr);
   }
@@ -190,33 +179,27 @@ int analogConverter(float v, float ratio){
   return analog;
 }
 
-void testCom(){
-  while (!Serial.available());
+void keyboard(){
+  if (!Serial.available());
   command = Serial.readString().toInt();
   if (command == 1){
-    v = 0.15;
-    w = 0.0;
-    direction = 0;
+    move(255,255);
+    leftOrright = 0;
   }
   else if (command == 0){
-    v = 0.0;
-    w = 0.0;
-    direction = 0;
+    stop();
   }
   else if (command == 2){
-    v = 0.0;
-    w = 0.5;
-    direction = 0;
+    rotateLeft(255,255);
+    leftOrright = 1;
   }
   else if (command == 3){
-    v = 0.0;
-    w = -0.5;
-    direction = 0;
+    rotateRight(255,255);
+    leftOrright = 2;
   }
   else if (command == 4){
-    v = 0.15;
-    w = 0.0;
-    direction = 1;
+    back(255,255);
+    leftOrright = 0;
   }
   else if (command == 5){
     grabber.write(85);
@@ -224,20 +207,30 @@ void testCom(){
   else if (command == 6){
     grabber.write(0);
   }
-  moveWithInput(v,w);
 }
 
 float positionByEncoder() {
   currentMillis = millis();
 
   if (currentMillis - previousMillis >= samplingrate){
-    vl, vr = calculateSpeed();
-    if (leftOrright == 1){
+    rpmL = (float)(leftEnCount * (1000/samplingrate) * 60 / pulsePerRound);
+    rpmR = (float)(rightEnCount * (1000/samplingrate) * 60 / pulsePerRound);
+
+    vl = rpmL/60 * (2*r*3.1412);
+    vr = rpmR/60 * (2*r*3.1412);
+    // Serial.print(vl);
+    // Serial.print("===");
+    // Serial.println(vr);
+    if (leftOrright == 1) {
       vl = -vl;
     }
-    else if (leftOrright == 2){
+    else if (leftOrright == 2) {
       vr = -vr;
     }
+
+    leftEnCount = 0;
+    rightEnCount = 0;
+
     x = x + (vl + vr) / 2 * cos(theta) * (samplingrate/1000);
     y = y + (vl + vr) / 2 * sin(theta)* (samplingrate/1000);
     theta = theta + (vr - vl) / l * (samplingrate/1000);
@@ -258,7 +251,7 @@ void sendXYZ(float x, float y, float theta) {
 }
 
 void  loop() {
-  testCom();
+  keyboard();
   x,y,theta = positionByEncoder();
   sendXYZ(x,y,theta);
 }

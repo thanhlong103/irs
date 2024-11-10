@@ -1,16 +1,16 @@
 #include <Wire.h>
 #include <Servo.h>
 
-int testComKeyboard;
-
 int servoPin = 6;
 Servo grabber;
+int command;
 int direction;
 
-float linear_velocity = 0.0;
-float angular_velocity = 0.0;
-String inputString = "";   // String to hold incoming data
-bool newData = false;
+volatile long leftEnCount = 0;
+volatile long rightEnCount = 0;
+
+float pulsePerRound = 2000;
+float pulsePerRoundR = 1500;
 
 // Left motor
 int ENA = 7;
@@ -28,10 +28,6 @@ int ENCLB = 3;
 
 int ENCRA = 18;
 int ENCRB = 19;
-
-volatile long leftEnCount = 0;
-volatile long rightEnCount = 0;
-const int pulsePerRound = 2000;
 
 long previousMillis = 0;
 long currentMillis = 0;
@@ -55,7 +51,9 @@ float x = 0;
 float y = 0;
 float theta = 0.0000001;
 
-// Interrupt service routines (ISRs) for encoder pulses
+int leftOrright = 0;
+
+// Interrupt service routines for encoder pulses
 void leftEnISRA() {
   leftEnCount++;
 }
@@ -73,17 +71,17 @@ void rightEnISRB() {
 }
 
 void setup() {
+  Serial.setTimeout(1);
   Serial.begin(9600);
-  Serial.println("Ready to receive velocities.");
 
   grabber.attach(servoPin); 
-  
-  // Setup interrupt 
+
+  // Setup encoder interrupts
   attachInterrupt(digitalPinToInterrupt(ENCLA), leftEnISRA, RISING);
   attachInterrupt(digitalPinToInterrupt(ENCLB), leftEnISRB, RISING);
-
   attachInterrupt(digitalPinToInterrupt(ENCRA), rightEnISRA, RISING);
   attachInterrupt(digitalPinToInterrupt(ENCRB), rightEnISRB, RISING);
+
 
   // Set all the motor control pins to outputs
   pinMode(ENA, OUTPUT);
@@ -109,6 +107,24 @@ void move(int leftSpeed, int rightSpeed) {
   digitalWrite(IN4, LOW);
 }
 
+void rotateRight(int leftSpeed, int rightSpeed) {
+  analogWrite(ENA, leftSpeed);
+  analogWrite(ENB, rightSpeed);
+  digitalWrite(IN1, HIGH);
+  digitalWrite(IN2, LOW);
+  digitalWrite(IN3, LOW);
+  digitalWrite(IN4, HIGH);
+}
+
+void rotateLeft(int leftSpeed, int rightSpeed) {
+  analogWrite(ENA, leftSpeed);
+  analogWrite(ENB, rightSpeed);
+  digitalWrite(IN1, LOW);
+  digitalWrite(IN2, HIGH);
+  digitalWrite(IN3, HIGH);
+  digitalWrite(IN4, LOW);
+}
+
 void back(int leftSpeed, int rightSpeed) {
   analogWrite(ENA, leftSpeed);
   analogWrite(ENB, rightSpeed);
@@ -126,6 +142,43 @@ void stop() {
   digitalWrite(IN4, LOW);
 }
 
+float calculateSpeed(){
+  rpmL = (float)(leftEnCount * (1000/samplingrate) * 60 / pulsePerRound);
+  rpmR = (float)(rightEnCount * (1000/samplingrate) * 60 / pulsePerRoundR);
+
+  vl = rpmL/60 * (2*r*3.1412);
+  vr = rpmR/60 * (2*r*3.1412);
+
+  leftEnCount = 0;
+  rightEnCount = 0;
+
+  return vl, vr;
+}
+
+void moveWithInput(float v, float w) {
+  vl = (2 * v - (l * w)) / 2;
+  vr = (2 * v + (l * w)) / 2;
+
+  float ratio = vl / vr;
+  int analogvl = analogConverter(vl, ratio);
+  int analogvr = analogConverter(vr, 1);
+
+  if (direction == 0) {
+    if (v == 0 && w > 0) {
+      rotateLeft(150, 150);
+      leftOrright = 1;
+    } else if (v == 0 && w < 0) {
+      rotateRight(150, 150);
+      leftOrright = 2;
+    } else {
+      move(analogvl, analogvr);
+      leftOrright = 0;
+    }
+  } else if (direction == 1) {
+    back(analogvl, analogvr);
+  }
+}
+
 int analogConverter(float v, float ratio){
   float rpm = (v*60)/(2*r*3.1412);
   float analog = rpm/maxrpm * 255;
@@ -137,84 +190,60 @@ int analogConverter(float v, float ratio){
   return analog;
 }
 
-void moveWithInput(float v, float w){
-  vl = (2*v - (l*w))/2;
-  vr = (2*v + (l*w))/2;
-
-  float ratio = vl/vr;
-
-  int analogvl = analogConverter(vl, ratio);
-  float analogvr = analogConverter(vr, 1);
-
-  if (direction == 0){
-    move(analogvl, analogvr);
+void testCom(){
+  while (!Serial.available());
+  command = Serial.readString().toInt();
+  if (command == 1){
+    v = 0.15;
+    w = 0.0;
+    direction = 0;
   }
-  else if (direction == 1){
-    back(analogvl, analogvr);
+  else if (command == 0){
+    v = 0.0;
+    w = 0.0;
+    direction = 0;
   }
+  else if (command == 2){
+    v = 0.0;
+    w = 0.5;
+    direction = 0;
+  }
+  else if (command == 3){
+    v = 0.0;
+    w = -0.5;
+    direction = 0;
+  }
+  else if (command == 4){
+    v = 0.15;
+    w = 0.0;
+    direction = 1;
+  }
+  else if (command == 5){
+    grabber.write(85);
+  }
+  else if (command == 6){
+    grabber.write(0);
+  }
+  moveWithInput(v,w);
 }
 
-float calculateSpeed(){
-  rpmL = (float)(leftEnCount * (1000/samplingrate) * 60 / pulsePerRound);
-  rpmR = (float)(rightEnCount * (1000/samplingrate) * 60 / pulsePerRound);
-
-  vl = rpmL/60 * (2*r*3.1412);
-  vr = rpmR/60 * (2*r*3.1412);
-
-  leftEnCount = 0;
-  rightEnCount = 0;
-
-  return vl, vr;
-}
-
-float positionByEncoder(){
+float positionByEncoder() {
   currentMillis = millis();
+
   if (currentMillis - previousMillis >= samplingrate){
     vl, vr = calculateSpeed();
-    x = x + (vl+vr)/2*cos(theta)*(samplingrate/1000);
-    y = y + (vl+vr)/2*sin(theta)*(samplingrate/1000);
-    theta = theta + (vr - vl)/l*(samplingrate/1000);
-    previousMillis = currentMillis;
-  }
-  return x, y, theta;
-}
-
-void loop() {
-  receiveData();
-  if (newData) {
-    processVelocities();
-    x, y, theta =positionByEncoder();
-    sendXYZ(x,y,theta);
-    newData = false;
-  }
-}
-
-void receiveData() {
-  while (Serial.available() > 0) {
-    char receivedChar = Serial.read();
-    if (receivedChar == '>') {  // End of message
-      newData = true;
-    } else if (receivedChar == '<') {  // Start of message
-      inputString = "";  // Clear the string to start a new message
-    } else {
-      inputString += receivedChar;
+    if (leftOrright == 1){
+      vl = -vl;
     }
+    else if (leftOrright == 2){
+      vr = -vr;
+    }
+    x = x + (vl + vr) / 2 * cos(theta) * (samplingrate/1000);
+    y = y + (vl + vr) / 2 * sin(theta)* (samplingrate/1000);
+    theta = theta + (vr - vl) / l * (samplingrate/1000);
+    previousMillis = millis();
   }
-}
-
-void processVelocities() {
-  int commaIndex = inputString.indexOf(',');  // Find the comma separating the two values
-  if (commaIndex > 0) {
-    // Extract and convert substrings to floats
-    linear_velocity = inputString.substring(0, commaIndex).toFloat();
-    angular_velocity = inputString.substring(commaIndex + 1).toFloat();
-
-    // Display the received values for debugging
-    Serial.print("Linear Velocity: ");
-    Serial.println(linear_velocity);
-    Serial.print("Angular Velocity: ");
-    Serial.println(angular_velocity);
-  }
+  return x,y,theta;
 }
 
 void sendXYZ(float x, float y, float theta) {
@@ -226,4 +255,10 @@ void sendXYZ(float x, float y, float theta) {
   Serial.print(",");
   Serial.print(theta);
   Serial.println(">");
+}
+
+void  loop() {
+  testCom();
+  x,y,theta = positionByEncoder();
+  sendXYZ(x,y,theta);
 }

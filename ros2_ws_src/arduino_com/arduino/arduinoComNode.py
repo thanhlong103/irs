@@ -5,11 +5,6 @@ from rclpy.node import Node
 import serial
 import time
 
-try:
-    import keyboard 
-except:
-    print("FAILED")
-
 class ArduinoCom(Node):
     def __init__(self, port, baudrate):
         super().__init__('arduino_com')  # Initialize the ROS2 Node
@@ -23,7 +18,7 @@ class ArduinoCom(Node):
     def send_velocity(self, linear, angular):
         # Create the message in the format "<linear,angular>"
         message = f"<{linear},{angular}>"
-        self.arduino.write(message.encode('utf-8'))
+        self.arduino.write(message.encode('utf-8'))     
 
     def read_xyz(self):
         if self.arduino.in_waiting > 0:

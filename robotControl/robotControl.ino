@@ -38,8 +38,8 @@ float rpmR = 0;
 float v = 0;
 float w = 0;
 
-float l = 0.18;
-float r = 0.025;
+float l = 0.172;
+float r = 0.0225;
 
 float samplingrate = 10;
 int maxrpm = 106;

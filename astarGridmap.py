@@ -2,9 +2,10 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import heapq
+import math
 
 # Parameters for the grid map
-grid_size = 20  # Grid dimensions (20x20)
+grid_size = 30  # Grid dimensions (20x20)
 resolution = 0.2  # Size of each grid cell in meters (0.2m x 0.2m)
 
 # Transformation parameters for the slices
@@ -116,9 +117,9 @@ def astar(grid_map, start, goal):
     # Return None if there's no path
     return None
 
-# Heuristic function (Diagonal distance, which accounts for diagonal movement)
+# Heuristic function (Diagonal distance)
 def heuristic(point, goal):
-    return max(abs(point[0] - goal[0]), abs(point[1] - goal[1]))
+    return math.sqrt((point[0] - goal[0])**2 + (point[1] - goal[1])**2)
 
 # Function to reconstruct path
 def reconstruct_path(came_from, current):
@@ -130,8 +131,8 @@ def reconstruct_path(came_from, current):
     return path
 
 # Define start and goal positions in grid coordinates
-start = (9, 9)
-goal = (15, 9)
+start = (14, 14)
+goal = (20, 14)
 
 # Run A* algorithm
 path = astar(grid_map, start, goal)
@@ -141,7 +142,7 @@ if path:
     # Mark the path on the grid map with a different value (e.g., 0.5 for lighter shade)
     for (x, y) in path:
         grid_map[y, x] = 0.5  # Mark as path
-
+    
     # Visualize the merged grid map with the path
     plt.imshow(grid_map, cmap='Reds', origin='lower')
 
@@ -156,7 +157,7 @@ if path:
     # Draw grid lines at cell edges
     plt.gca().grid(which='minor', color='black', linestyle='-', linewidth=0.5)
 
-    plt.title("Merged Grid Map with A* Path (Diagonal Movement)")
+    plt.title("Merged Grid Map with A* Path")
     plt.xlabel("X (in grid cells)")
     plt.ylabel("Y (in grid cells)")
     plt.show()

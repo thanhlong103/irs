@@ -9,7 +9,7 @@ int direction;
 volatile long leftEnCount = 0;
 volatile long rightEnCount = 0;
 
-float pulsePerRound = 2000;
+float pulsePerRound = 2100; // 7 pulses x 2 channels x 150 gear ratio
 // float pulsePerRoundR = 1500;
 
 // Left motor

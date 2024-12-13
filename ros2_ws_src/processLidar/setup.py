@@ -21,7 +21,7 @@ setup(
     entry_points={
         'console_scripts': [
             'datacollect = processLidar.dataCollect:main',
-            'localization = processLidar.trilaterationSIM:main'
+            'localization = processLidar.getTrilaterationData:main'
         ],
     },
 )
